@@ -1,0 +1,112 @@
+import os
+
+import google_auth_oauthlib.flow
+
+import googleapiclient.discovery
+
+import googleapiclient.errors
+
+import urllib.request
+
+# Set up the YouTube Data API credentials
+
+scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+
+flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
+
+    "client_secret.json", scopes)
+
+credentials = flow.run_console()
+
+# Create a YouTube Data API client
+
+youtube = googleapiclient.discovery.build("youtube", "v3", credentials=credentials)
+
+# Define a function to search for videos and retrieve their details
+
+def search_videos(query):
+
+    request = youtube.search().list(
+
+        q=query,
+
+        part="id,snippet",
+
+        maxResults=1
+
+    )
+
+    response = request.execute()
+
+    video_id = response["items"][0]["id"]["videoId"]
+
+    video_title = response["items"][0]["snippet"]["title"]
+
+    return (video_id, video_title)
+
+# Define a function to send a message with the YouTube video link
+
+def send_message(chat_id, text):
+
+    url = "https://api.telegram.org/bot{}/sendMessage?chat_id={}&text={}".format(
+
+        os.environ["TELEGRAM_BOT_TOKEN"],
+
+        chat_id,
+
+        text
+
+    )
+
+    urllib.request.urlopen(url)
+
+# Define a function to handle incoming messages
+
+def handle_message(message):
+
+    chat_id = message["chat"]["id"]
+
+    text = message["text"]
+
+    if text.startswith("/music "):
+
+        query = text[7:]
+
+        video_id, video_title = search_videos(query + " music")
+
+        send_message(chat_id, "Here's your music: https://www.youtube.com/watch?v={}".format(video_id))
+
+    elif text.startswith("/video "):
+
+        query = text[7:]
+
+        video_id, video_title = search_videos(query)
+
+        send_message(chat_id, "Here's your video: https://www.youtube.com/watch?v={}".format(video_id))
+
+    else:
+
+        send_message(chat_id, "I don't understand what you're asking for. Please try again.")
+
+# Define a function to handle updates from the Telegram bot
+
+def handle_update(update):
+
+    if "message" in update:
+
+        handle_message(update["message"])
+
+# Start the bot
+
+while True:
+
+    request_url = "https://api.telegram.org/bot{}/getUpdates".format(os.environ["TELEGRAM_BOT_TOKEN"])
+
+    response = urllib.request.urlopen(request_url)
+
+    updates = json.loads(response.read())
+
+    for update in updates["result"]:
+
+        handle_update(update)
+
